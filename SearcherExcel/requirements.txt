@@ -1,0 +1,4 @@
+et-xmlfile==1.0.1
+jdcal==1.4.1
+openpyxl==3.0.6
+tqdm==4.56.0

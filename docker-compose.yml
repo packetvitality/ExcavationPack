@@ -1,0 +1,62 @@
+version: '3.4'
+
+services:
+  datacategorizer:
+    build: './DataCategorizer'
+    volumes: 
+      - ${WORKING_DIR}:/app/Data
+      - ${DUMP_DIR}:/app/Data/Dump
+    deploy:
+      replicas: 10
+
+  searcherexcel:
+    build: './SearcherExcel'
+    volumes: 
+      - ${WORKING_DIR}:/app/Data
+      - ${DUMP_DIR}:/app/Data/Dump
+    depends_on:
+      - "datacategorizer"
+    deploy:
+      replicas: 2
+ 
+  searcherexcellegacy:
+    build: './SearcherExcelLegacy'
+    volumes: 
+      - ${WORKING_DIR}:/app/Data
+      - ${DUMP_DIR}:/app/Data/Dump
+    depends_on:
+      - "datacategorizer"
+    deploy:
+      replicas: 2
+ 
+  searcherpdf:
+    build: './SearcherPdf'
+    volumes: 
+      - ${WORKING_DIR}:/app/Data
+      - ${DUMP_DIR}:/app/Data/Dump
+    depends_on:
+      - "datacategorizer"
+    deploy:
+      replicas: 2
+ 
+  searcherplaintext:
+    build: './SearcherPlaintext'
+    volumes: 
+      - ${WORKING_DIR}:/app/Data
+      - ${DUMP_DIR}:/app/Data/Dump
+    depends_on:
+      - "datacategorizer"
+    deploy:
+      replicas: 2
+ 
+  searcherword:
+    build: './SearcherWord'
+    volumes: 
+      - ${WORKING_DIR}:/app/Data
+      - ${DUMP_DIR}:/app/Data/Dump
+    depends_on:
+      - "datacategorizer"
+    deploy:
+      replicas: 2
+  
+
