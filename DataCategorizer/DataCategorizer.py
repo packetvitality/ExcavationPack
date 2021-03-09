@@ -45,7 +45,7 @@ class DataCategorizer:
         self.notsupported = self._sql_select_data_category("NotSupported")
         self.notdetermined = self._sql_select_data_category("NotDetermined")
         self.duplicate = self._sql_select_data_category("Duplicate")
-        # self.uncompressed = self._sql_select_data_category("Uncompressed")
+        self.data_error = self._sql_select_data_category("Error")
 
     def _rename_file(self, filename):
         """
@@ -202,7 +202,9 @@ class DataCategorizer:
             sql = f"""
             SELECT FileHash, FileName
             FROM categorization 
-            WHERE DataCategoryID = {DataCategoryID};"""
+            WHERE DataCategoryID = {DataCategoryID}
+            ORDER BY RANDOM();"""
+            ## Random order helps processors avoid starting on the same file
             cursor.execute(sql)
             files = cursor.fetchall()
             conn.close()
@@ -340,7 +342,7 @@ class DataCategorizer:
     def _sql_insert_data_categories(self):
 
         try:
-            data_categories = ("Plaintext", "Pdf", "Excel", "ExcelLegacy", "Word", "Gzip", "NotSupported", "NotDetermined", "Duplicate", "Uncompressed")
+            data_categories = ("Plaintext", "Pdf", "Excel", "ExcelLegacy", "Word", "Gzip", "NotSupported", "NotDetermined", "Duplicate", "Error")
             conn = sqlite3.connect(self.db)
             cursor = conn.cursor()
             for category in data_categories:    
@@ -686,7 +688,7 @@ class DataCategorizer:
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
                 log_file.write("[{} Failed]{} --- {}".format(self._hash_file.__name__,filename, str(e)))
                 log_file.write('\n')
-            return filename
+            return None
    
     def _uncompress_gzip(self, filename, filehash):
         """
@@ -736,15 +738,9 @@ class DataCategorizer:
 
             for filename in filename_gen:
                 if self._sql_select_filename_exist(filename): # Skip files that have already been loaded into the database. Necessary for dealing with newly uncompressed files
-                    continue
-            
+                    continue 
                 self._sql_insert_category_filename(filename, self.notdetermined) #hashes can take a while with large files, need to insert into database before file hashing begins
-                filehash = self._hash_file(filename) 
-                # Handling duplicate files, those with different file names but the same hash 
-                if self._sql_select_filehash_exist(filehash):
-                    self._sql_update_category_byname(filename, self.duplicate)
-                else:
-                    self._sql_update_category_filehash(filehash, filename)
+
 
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
                 log_file.write("[{} Success]".format(self._load_filenames.__name__))
@@ -768,72 +764,74 @@ class DataCategorizer:
         self._sql_update_categorization_status(0) # Explicitly setting, may not be the first run. 
         self._load_filenames()
 
-        processing = self._sql_select_all_category(self.notdetermined)
+        files_to_process = self._sql_select_all_category(self.notdetermined)
 
-        while processing:
-            files = self._sql_select_all_category(self.notdetermined)
-            if files:
-                for filehash, filename in files:
-                    if filehash == None: # Files are loaded before they are hashed, skip until hash is determined
+        while files_to_process:
+            for filehash, filename in files_to_process:                  
+                if filehash == None:
+                    filehash = self._hash_file(filename) # Attempt to determine hash
+                    if filehash == None:
+                        self._sql_update_category_byname(filename, self.data_error)
                         continue
-
-                    # file_state = self._sql_select_state(filehash)
-                    # if file_state: # Skip files that other processors have already started
-                    #     continue
-
-                    self._sql_insert_state(filehash, self.categorizing) #Take ownership so other processors do not try
-
-                    filetype = self._get_file_magic(filename)
-
-                    if filetype:
-                        # Compressed files
-                        if "gzip compressed data" in filetype.lower():
-                            self._sql_update_category_byhash(filehash, self.gzip)
-                            self._sql_update_state(filehash, self.processing) #Take ownership so other processors do not try
-                            uncompressed = self._uncompress_gzip(filename, filehash)
-                            if uncompressed:
-                                self._sql_update_state(filehash, self.processed) 
-                                self._load_filenames(uncompressed) # load the new filenames
-                            else:
-                                self._sql_update_state(filehash, self.error) 
-
-                        # Text Files
-                        elif "text" in filetype.lower():
-                            self._sql_update_category_byhash(filehash, self.plaintext)
-                            self._sql_update_state(filehash, self.categorized) 
-
-                        # Modern Excel Files
-                        elif "Microsoft Excel 2007+" in filetype:
-                            self._sql_update_category_byhash(filehash, self.excel)
-                            self._sql_update_state(filehash, self.categorized) 
-
-                        # Legacy Excel Files
-                        elif (".xls" in filename) and ("Composite Document File V2 Document, Little Endian" in filetype or "CDFV2 Microsoft Excel" in filetype):
-                            self._sql_update_category_byhash(filehash, self.excellegacy)
-                            self._sql_update_state(filehash, self.categorized) 
-
-                        # Modern Word Files
-                        elif "Microsoft Word 2007+" in filetype:
-                            self._sql_update_category_byhash(filehash, self.word)
-                            self._sql_update_state(filehash, self.categorized) 
-
-                        # PDF Files
-                        elif "PDF document" in filetype:
-                            self._sql_update_category_byhash(filehash, self.pdf)
-                            self._sql_update_state(filehash, self.categorized) 
-
-                        # Unsupported files
-                        else:
-                            self._sql_update_category_byhash(filehash, self.notsupported)
-                            self._sql_update_state(filehash, self.categorized) 
-
-                    # Unable to determine file type
+                    elif self._sql_select_filehash_exist(filehash): # Handling duplicate files, those with different file names but the same hash 
+                        self._sql_update_category_byname(filename, self.duplicate)
+                        continue
                     else:
-                        self._sql_update_state(filehash, self.error) 
+                        self._sql_update_category_filehash(filehash, filename)
+
+                self._sql_insert_state(filehash, self.categorizing) #Take ownership so other processors do not try
+
+                filetype = self._get_file_magic(filename)
+
+                if filetype:
+                    # Compressed files
+                    if "gzip compressed data" in filetype.lower():
+                        self._sql_update_category_byhash(filehash, self.gzip)
+                        self._sql_update_state(filehash, self.processing) #Take ownership so other processors do not try
+                        uncompressed = self._uncompress_gzip(filename, filehash)
+                        if uncompressed:
+                            self._sql_update_state(filehash, self.processed) 
+                            self._load_filenames(uncompressed) # load the new filenames
+                        else:
+                            self._sql_update_state(filehash, self.error) 
+
+                    # Text Files
+                    elif "text" in filetype.lower():
+                        self._sql_update_category_byhash(filehash, self.plaintext)
+                        self._sql_update_state(filehash, self.categorized) 
+
+                    # Modern Excel Files
+                    elif "Microsoft Excel 2007+" in filetype:
+                        self._sql_update_category_byhash(filehash, self.excel)
+                        self._sql_update_state(filehash, self.categorized) 
+
+                    # Legacy Excel Files
+                    elif (".xls" in filename) and ("Composite Document File V2 Document, Little Endian" in filetype or "CDFV2 Microsoft Excel" in filetype):
+                        self._sql_update_category_byhash(filehash, self.excellegacy)
+                        self._sql_update_state(filehash, self.categorized) 
+
+                    # Modern Word Files
+                    elif "Microsoft Word 2007+" in filetype:
+                        self._sql_update_category_byhash(filehash, self.word)
+                        self._sql_update_state(filehash, self.categorized) 
+
+                    # PDF Files
+                    elif "PDF document" in filetype:
+                        self._sql_update_category_byhash(filehash, self.pdf)
+                        self._sql_update_state(filehash, self.categorized) 
+
+                    # Unsupported files
+                    else:
+                        self._sql_update_category_byhash(filehash, self.notsupported)
+                        self._sql_update_state(filehash, self.categorized) 
+
+                # Unable to determine file type
+                else:
+                    self._sql_update_category_byhash(filehash, self.data_error) 
                 
             # If not other containers are still categorizing data, set the status to complete. 
-            processing = self._sql_select_all_category(self.notdetermined)
-            if not processing:
+            files_to_process = self._sql_select_all_category(self.notdetermined)
+            if not files_to_process:
                 self._sql_update_categorization_status(1)
  
 def main():
