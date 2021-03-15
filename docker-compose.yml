@@ -7,7 +7,7 @@ services:
       - ${WORKING_DIR}:/app/Data
       - ${DUMP_DIR}:/app/Data/Dump
     deploy:
-      replicas: 10
+      replicas: 5
 
   searcherexcel:
     build: './SearcherExcel'

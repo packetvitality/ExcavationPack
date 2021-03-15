@@ -73,6 +73,7 @@ class SearcherWord:
 
         # Data Category
         self.word = self._sql_select_data_category("Word")
+        self.notdetermined = self._sql_select_data_category("NotDetermined")
 
     def _sql_select_ready(self, DataCategoryID, StateID):
         """
@@ -90,6 +91,7 @@ class SearcherWord:
             ON categorization.FileHash = state.FileHash
             where DataCategoryID = {DataCategoryID}
             AND StateID = {StateID}
+            ORDER BY RANDOM()
             ;
             """
             cursor.execute(sql)
@@ -181,7 +183,30 @@ class SearcherWord:
                 log_file.write('\n')
             return False
 
-    def _sql_select_categorization_status(self):
+    def _sql_select_processing_status(self):
+        try:
+            # Connect to database
+            conn = sqlite3.connect(self.db)
+            cursor = conn.cursor()
+            # Data to Select
+            sql = f"""SELECT * FROM state WHERE StateId = {self.processing};"""
+            cursor.execute(sql)
+            state = cursor.fetchall()
+            conn.close()
+            # Returning Filename and FileHash
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Success]".format(self._sql_select_processing_status.__name__))
+                log_file.write('\n')
+            if state:
+                state = state[0][0]
+            return state
+        except Exception as e:
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Failed]{}".format(self._sql_select_processing_status.__name__, str(e)))
+                log_file.write('\n')
+            return False
+
+    def _sql_select_load_status(self):
         """
         Used to check the state of completion for the data categorizer
         """
@@ -190,20 +215,49 @@ class SearcherWord:
             conn = sqlite3.connect(self.db)
             cursor = conn.cursor()
             # Data to Select
-            sql = f"""SELECT AllCategorized FROM categorization_status;"""
+            sql = f"""SELECT AllLoaded FROM load_status WHERE AllLoaded = 0;"""
             cursor.execute(sql)
             state = cursor.fetchall()
             conn.close()
             # Returning Filename and FileHash
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
-                log_file.write("[{} Success]".format(self._sql_select_categorization_status.__name__))
+                log_file.write("[{} Success]".format(self._sql_select_load_status.__name__))
                 log_file.write('\n')
             if state:
                 state = state[0][0]
             return state
         except Exception as e:
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
-                log_file.write("[{} Failed]{}".format(self._sql_select_categorization_status.__name__, str(e)))
+                log_file.write("[{} Failed]{}".format(self._sql_select_load_status.__name__, str(e)))
+                log_file.write('\n')
+            return False
+
+    def _sql_select_all_category(self, DataCategoryID):
+        """
+        Selects and returns the FileName and FileHash from the database for all entries with a specific DataCategoryID
+        """
+        try:
+            # Connect to database
+            conn = sqlite3.connect(self.db)
+            cursor = conn.cursor()
+            # Data to Select
+            sql = f"""
+            SELECT FileHash, FileName
+            FROM categorization 
+            WHERE DataCategoryID = {DataCategoryID}
+            ORDER BY RANDOM();"""
+            ## Random order helps processors avoid starting on the same file
+            cursor.execute(sql)
+            files = cursor.fetchall()
+            conn.close()
+            # Returning Filename and FileHash
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Success]".format(self._sql_select_all_category.__name__))
+                log_file.write('\n')
+            return files
+        except Exception as e:
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Failed]{}".format(self._sql_select_all_category.__name__, str(e)))
                 log_file.write('\n')
             return False
 
@@ -298,27 +352,29 @@ class SearcherWord:
             return False
 
     def process_word(self):
-        categorized = self._sql_select_categorization_status()
+        # Allowing some time for the DB to be set up, need a better way to handle this
+        sleep(60)
 
-        while not categorized:
+        allloaded = self._sql_select_load_status()
+        categorizing = self._sql_select_all_category(self.notdetermined)
+        processing = self._sql_select_processing_status()
+
+        while allloaded == 0 or categorizing or processing:
             files = self._sql_select_ready(self.word, self.categorized)
             if files:
                 for filehash, filename in tqdm(files, desc="Progress"):
+                    ProcessingStartTime = datetime.now()
+                    if self._search_word(filename):
+                        ProcessingEndTime = datetime.now()
+                        ElapsedTime = ProcessingEndTime - ProcessingStartTime
+                        self._sql_update_state(filehash, self.processed)
+                        self._sql_insert_statistics(filehash, ProcessingStartTime, ProcessingEndTime, ElapsedTime)
+                    else:
+                        self._sql_update_state(filehash, self.error)
 
-                    file_state = self._sql_select_state(filehash)
-                    if file_state == self.categorized:
-                        ProcessingStartTime = datetime.now()
-                        if self._search_word(filename):
-                            ProcessingEndTime = datetime.now()
-                            ElapsedTime = ProcessingEndTime - ProcessingStartTime
-                            self._sql_update_state(filehash, self.processed)
-                            self._sql_insert_statistics(filehash, ProcessingStartTime, ProcessingEndTime, ElapsedTime)
-                        else:
-                            self._sql_update_state(filehash, self.error)
-
-            categorized = self._sql_select_categorization_status()
-            delay = randint(5,20)
-            sleep(delay)
+            allloaded = self._sql_select_load_status()
+            categorizing = self._sql_select_all_category(self.notdetermined)
+            sleep(30)
                     
 def main():
     working_dir = "Data"

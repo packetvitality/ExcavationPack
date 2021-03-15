@@ -28,25 +28,44 @@ class DataCategorizer:
         self.system_encoding = getfilesystemencoding()
 
     def _load_values(self):
-        # States
-        self.categorizing = self._sql_select_state_category("Categorizing")
-        self.categorized = self._sql_select_state_category("Categorized")
-        self.processing = self._sql_select_state_category("Processing")
-        self.processed = self._sql_select_state_category("Processed")
-        self.error = self._sql_select_state_category("Error")
+        attempts = 0
+        while attempts < 3:
+            try:
+                # States
+                self.categorizing = self._sql_select_state_category("Categorizing")
+                self.categorized = self._sql_select_state_category("Categorized")
+                self.processing = self._sql_select_state_category("Processing")
+                self.processed = self._sql_select_state_category("Processed")
+                self.error = self._sql_select_state_category("Error")
 
-        # Data Categories
-        self.gzip = self._sql_select_data_category("Gzip")
-        self.excel = self._sql_select_data_category("Excel")
-        self.excellegacy = self._sql_select_data_category("ExcelLegacy")
-        self.pdf = self._sql_select_data_category("Pdf")
-        self.plaintext = self._sql_select_data_category("Plaintext")
-        self.word = self._sql_select_data_category("Word")
-        self.notsupported = self._sql_select_data_category("NotSupported")
-        self.notdetermined = self._sql_select_data_category("NotDetermined")
-        self.duplicate = self._sql_select_data_category("Duplicate")
-        self.data_error = self._sql_select_data_category("Error")
-
+                # Data Categories
+                self.gzip = self._sql_select_data_category("Gzip")
+                self.excel = self._sql_select_data_category("Excel")
+                self.excellegacy = self._sql_select_data_category("ExcelLegacy")
+                self.pdf = self._sql_select_data_category("Pdf")
+                self.plaintext = self._sql_select_data_category("Plaintext")
+                self.word = self._sql_select_data_category("Word")
+                self.notsupported = self._sql_select_data_category("NotSupported")
+                self.notdetermined = self._sql_select_data_category("NotDetermined")
+                self.duplicate = self._sql_select_data_category("Duplicate")
+                self.data_error = self._sql_select_data_category("Error")
+                with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                    log_file.write("[{} Success] Loaded all values.".format(self._load_values.__name__))
+                    log_file.write('\n')
+                return True
+            except Exception as e:
+                attempts += 1
+                with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                    log_file.write("[{} Failed] Attempting to load again.{}".format(self._load_values.__name__, str(e)))
+                    log_file.write('\n')
+                sleep(5)
+            
+        if attempts == 3:
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Failed] All attempts to load have failed. --- {}".format(self._load_values.__name__, str(e)))
+                log_file.write('\n')
+            return False
+    
     def _rename_file(self, filename):
         """
         Renames file using 'safe' characters.
@@ -381,28 +400,53 @@ class DataCategorizer:
                 log_file.write('\n')
             return False
  
-    def _sql_update_categorization_status(self, status):
+    def _sql_insert_load_status(self, DirectoryName):
         try:
             # Connect to database
             conn = sqlite3.connect(self.db)
             cursor = conn.cursor()
             #Data to Update
             sql = f"""
-            UPDATE categorization_status
-            SET AllCategorized = {status}
+            INSERT OR IGNORE INTO load_status VALUES ("{DirectoryName}", 0)
             """
             cursor.execute(sql)
             # Commit and Close
             conn.commit()
             conn.close()
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
-                log_file.write("[{} Success]".format(self._sql_update_categorization_status.__name__))
+                log_file.write("[{} Success]".format(self._sql_insert_load_status.__name__))
                 log_file.write('\n')
             return True
 
         except Exception as e:
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
-                log_file.write("[{} Failed]{}".format(self._sql_update_categorization_status.__name__, str(e)))
+                log_file.write("[{} Failed]{}".format(self._sql_insert_load_status.__name__, str(e)))
+                log_file.write('\n')
+            return False
+
+    def _sql_update_load_status(self, DirectoryName):
+        try:
+            # Connect to database
+            conn = sqlite3.connect(self.db)
+            cursor = conn.cursor()
+            #Data to Update
+            sql = f"""
+            UPDATE load_status
+            SET AllLoaded = 1
+            WHERE DirectoryName = "{DirectoryName}"
+            """
+            cursor.execute(sql)
+            # Commit and Close
+            conn.commit()
+            conn.close()
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Success]".format(self._sql_update_load_status.__name__))
+                log_file.write('\n')
+            return True
+
+        except Exception as e:
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Failed]{}".format(self._sql_update_load_status.__name__, str(e)))
                 log_file.write('\n')
             return False
 
@@ -626,9 +670,10 @@ class DataCategorizer:
                         REFERENCES  categorization(FileHash)
                 );
                 """
-                create_table_categorization_status = """
-                CREATE TABLE categorization_status (
-                    AllCategorized INTEGER
+                create_table_load_status = """
+                CREATE TABLE load_status (
+                    DirectoryName STRING PRIMARY KEY,
+                    AllLoaded INTEGER
                 );
                 """
 
@@ -637,14 +682,9 @@ class DataCategorizer:
                 cursor.execute(create_table_categorization)
                 cursor.execute(create_table_state)
                 cursor.execute(create_table_statistics)
-                cursor.execute(create_table_categorization_status)
+                cursor.execute(create_table_load_status)
 
-                # Set starting value for categorization_status
-                sql = """INSERT INTO categorization_status VALUES (0);"""
-                cursor.execute(sql)
-                conn.commit()
-                conn.close()
-
+                self._sql_insert_load_status(self.dump_dir) # Need to add ASAP so data processors know to wait for files
                 self._sql_insert_data_categories()
                 self._sql_insert_state_categories()
 
@@ -721,9 +761,11 @@ class DataCategorizer:
             sleep(delay)
             
             if my_directory:
-                filename_gen = self._generate_filenames(my_directory)
+                directorytoload = my_directory
             else:
-                filename_gen = self._generate_filenames(self.dump_dir)
+                directorytoload = self.dump_dir
+
+            filename_gen = self._generate_filenames(directorytoload)
                 
             for filename in filename_gen:
                 self._rename_file(filename) 
@@ -731,16 +773,16 @@ class DataCategorizer:
             # Load files into database
             # Explicitly renaming files first and then making a new filename generator avoids
             # other processors trying to work on files that have been renamed
-            if my_directory:
-                filename_gen = self._generate_filenames(my_directory)
-            else:
-                filename_gen = self._generate_filenames(self.dump_dir)
 
+            filename_gen = self._generate_filenames(directorytoload)
+            self._sql_insert_load_status(directorytoload)
+            
             for filename in filename_gen:
-                if self._sql_select_filename_exist(filename): # Skip files that have already been loaded into the database. Necessary for dealing with newly uncompressed files
+                if self._sql_select_filename_exist(filename): 
                     continue 
-                self._sql_insert_category_filename(filename, self.notdetermined) #hashes can take a while with large files, need to insert into database before file hashing begins
+                self._sql_insert_category_filename(filename, self.notdetermined) 
 
+            self._sql_update_load_status(directorytoload)
 
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
                 log_file.write("[{} Success]".format(self._load_filenames.__name__))
@@ -761,7 +803,6 @@ class DataCategorizer:
         self._create_dirs()
         self._create_db()
         self._load_values()
-        self._sql_update_categorization_status(0) # Explicitly setting, may not be the first run. 
         self._load_filenames()
 
         files_to_process = self._sql_select_all_category(self.notdetermined)
@@ -828,11 +869,10 @@ class DataCategorizer:
                 # Unable to determine file type
                 else:
                     self._sql_update_category_byhash(filehash, self.data_error) 
+                    self._sql_update_state(filehash, self.error)
                 
             # If not other containers are still categorizing data, set the status to complete. 
             files_to_process = self._sql_select_all_category(self.notdetermined)
-            if not files_to_process:
-                self._sql_update_categorization_status(1)
  
 def main():
     # Variables & instantiation 
