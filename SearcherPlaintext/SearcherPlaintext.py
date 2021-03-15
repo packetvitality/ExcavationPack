@@ -63,17 +63,45 @@ class SearcherPlaintext:
             for line in file:
                 self.keywords.add(line.strip())
 
-        # States
-        self.categorizing = self._sql_select_state_category("Categorizing")
-        self.categorized = self._sql_select_state_category("Categorized")
-        self.processing = self._sql_select_state_category("Processing")
-        self.processed = self._sql_select_state_category("Processed")
-        self.error = self._sql_select_state_category("Error")
+    def _load_values(self):
+        attempts = 0
+        while attempts < 3:
+            try:
+                # States
+                self.categorizing = self._sql_select_state_category("Categorizing")
+                self.categorized = self._sql_select_state_category("Categorized")
+                self.processing = self._sql_select_state_category("Processing")
+                self.processed = self._sql_select_state_category("Processed")
+                self.error = self._sql_select_state_category("Error")
 
-        # Data Category
-        self.plaintext= self._sql_select_data_category("Plaintext")
-        self.notdetermined = self._sql_select_data_category("NotDetermined")
-
+                # Data Categories
+                self.gzip = self._sql_select_data_category("Gzip")
+                self.excel = self._sql_select_data_category("Excel")
+                self.excellegacy = self._sql_select_data_category("ExcelLegacy")
+                self.pdf = self._sql_select_data_category("Pdf")
+                self.plaintext = self._sql_select_data_category("Plaintext")
+                self.word = self._sql_select_data_category("Word")
+                self.notsupported = self._sql_select_data_category("NotSupported")
+                self.notdetermined = self._sql_select_data_category("NotDetermined")
+                self.duplicate = self._sql_select_data_category("Duplicate")
+                self.data_error = self._sql_select_data_category("Error")
+                with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                    log_file.write("[{} Success] Loaded all values.".format(self._load_values.__name__))
+                    log_file.write('\n')
+                return True
+            except Exception as e:
+                attempts += 1
+                with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                    log_file.write("[{} Failed] Attempting to load again.{}".format(self._load_values.__name__, str(e)))
+                    log_file.write('\n')
+                sleep(20)
+            
+        if attempts == 3:
+            with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+                log_file.write("[{} Failed] All attempts to load have failed. --- {}".format(self._load_values.__name__, str(e)))
+                log_file.write('\n')
+            return False
+ 
     def _sql_select_ready(self, DataCategoryID, StateID):
         """
         Selects and returns the FileName and FileHash from the database for all file with a certain state. 
@@ -350,6 +378,7 @@ class SearcherPlaintext:
     def process_text(self):
         # Allowing some time for the DB to be set up, need a better way to handle this
         sleep(60)
+        self._load_values()
 
         allloaded = self._sql_select_load_status()
         categorizing = self._sql_select_all_category(self.notdetermined)

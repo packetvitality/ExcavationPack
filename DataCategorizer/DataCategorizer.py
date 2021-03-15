@@ -58,7 +58,7 @@ class DataCategorizer:
                 with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
                     log_file.write("[{} Failed] Attempting to load again.{}".format(self._load_values.__name__, str(e)))
                     log_file.write('\n')
-                sleep(5)
+                sleep(20)
             
         if attempts == 3:
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
