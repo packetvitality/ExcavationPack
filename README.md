@@ -25,3 +25,13 @@ To-date, the framework provides the capability to process six data types using a
 ## Decompression
 - [x] Gzip
 
+# Concept
+The framework is focused on identifying points of interest within a data dump containing an unforeseen number of directories, subdirectories, and files. Files stored in an unstructured tree are common, as evidenced in ‘Cit0Day’ breach collection and the ‘BlueLeaks’ data dump. The strategy taken to solve this problem can be summarized into two simple steps:
+1. Categorize each file into data types. Examples of data types include plaintext, Excel spreadsheet, PDF, etc.
+2. The appropriate 'workflow' will process the data type. 
+
+The diagram below illustrates how the framework processes data. There are 'categorizers' and 'searchers' running in containers. Multiple containers of any type can work concurrently. Also, note that each type of container can utilize a different programming/scripting language. For example, the Categorizers and Excel Searchers can utilize Python, while Plaintext searchers utilize Go, and Pdf Searchers utilize Bash. Only two instances of each container are illustrated below; however, the quantity of containers is controlled by the user.
+
+![image](https://user-images.githubusercontent.com/45752781/111229585-607e8580-85a3-11eb-9b7d-7bdde6de9dfe.png)
+
+*To date all of the containers are using Python, but that is just based on my knowledge, comfort level, and the fact that this was the next evolution of a monolithic Python script.*
