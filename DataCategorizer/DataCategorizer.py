@@ -15,6 +15,7 @@ from time import sleep
 #Third party libraries
 import magic
 from tqdm import tqdm
+import pyunpack
 
 class DataCategorizer:
     """
@@ -39,7 +40,7 @@ class DataCategorizer:
                 self.error = self._sql_select_state_category("Error")
 
                 # Data Categories
-                self.gzip = self._sql_select_data_category("Gzip")
+                self.compressed = self._sql_select_data_category("Compressed")
                 self.excel = self._sql_select_data_category("Excel")
                 self.excellegacy = self._sql_select_data_category("ExcelLegacy")
                 self.pdf = self._sql_select_data_category("Pdf")
@@ -361,7 +362,7 @@ class DataCategorizer:
     def _sql_insert_data_categories(self):
 
         try:
-            data_categories = ("Plaintext", "Pdf", "Excel", "ExcelLegacy", "Word", "Gzip", "NotSupported", "NotDetermined", "Duplicate", "Error")
+            data_categories = ("Plaintext", "Pdf", "Excel", "ExcelLegacy", "Word", "Compressed", "NotSupported", "NotDetermined", "Duplicate", "Error")
             conn = sqlite3.connect(self.db)
             cursor = conn.cursor()
             for category in data_categories:    
@@ -730,24 +731,47 @@ class DataCategorizer:
                 log_file.write('\n')
             return None
    
-    def _uncompress_gzip(self, filename, filehash):
+    # def _uncompress_gzip(self, filename, filehash):
+    #     """
+    #     Uncompresses the file and saves to the destination directory
+    #     """
+    #     try:
+    #         destination_dir = os.path.join(os.path.dirname(filename), "Uncompressed", os.path.basename(filename.split(".")[0]))
+    #         tar = tarfile.open(filename)
+    #         members = tar.getmembers() # Contents of the compressed file
+    #         tar.extractall(members=tqdm(members, desc=f"Uncompressing {filename}"), path=destination_dir) # Uncompress and use a progress bar
+    #         tar.close()
+    #         with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+    #             log_file.write("[{} Success]{}".format(self._uncompress_gzip.__name__,filename))
+    #             log_file.write('\n')
+    #         return destination_dir
+
+    #     except Exception as e:
+    #         with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
+    #             log_file.write("[{} Failed]{} --- {}".format(self._uncompress_gzip.__name__,filename, str(e)))
+    #             log_file.write('\n')
+    #         return False
+
+    def _uncompress_general(self, filename, filehash):
         """
         Uncompresses the file and saves to the destination directory
         """
         try:
             destination_dir = os.path.join(os.path.dirname(filename), "Uncompressed", os.path.basename(filename.split(".")[0]))
-            tar = tarfile.open(filename)
-            members = tar.getmembers() # Contents of the compressed file
-            tar.extractall(members=tqdm(members, desc=f"Uncompressing {filename}"), path=destination_dir) # Uncompress and use a progress bar
-            tar.close()
+            
+            if not os.path.isdir(destination_dir):
+                os.makedirs(destination_dir)
+
+            pyunpack.Archive(filename).extractall(destination_dir)
+
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
-                log_file.write("[{} Success]{}".format(self._uncompress_gzip.__name__,filename))
+                log_file.write("[{} Success]{}".format(self._uncompress_general.__name__,filename))
                 log_file.write('\n')
             return destination_dir
 
         except Exception as e:
             with open(self.log_file, 'a', encoding=self.system_encoding) as log_file:
-                log_file.write("[{} Failed]{} --- {}".format(self._uncompress_gzip.__name__,filename, str(e)))
+                log_file.write("[{} Failed]{} --- {}".format(self._uncompress_general.__name__,filename, str(e)))
                 log_file.write('\n')
             return False
 
@@ -826,10 +850,10 @@ class DataCategorizer:
 
                 if filetype:
                     # Compressed files
-                    if "gzip compressed data" in filetype.lower():
-                        self._sql_update_category_byhash(filehash, self.gzip)
+                    if "gzip compressed data" in filetype.lower() or "zip archive data" in filetype.lower() or "posix tar archive" in filetype.lower() or "bzip2 compressed data" in filetype.lower():
+                        self._sql_update_category_byhash(filehash, self.compressed)
                         self._sql_update_state(filehash, self.processing) #Take ownership so other processors do not try
-                        uncompressed = self._uncompress_gzip(filename, filehash)
+                        uncompressed = self._uncompress_general(filename, filehash)
                         if uncompressed:
                             self._sql_update_state(filehash, self.processed) 
                             self._load_filenames(uncompressed) # load the new filenames

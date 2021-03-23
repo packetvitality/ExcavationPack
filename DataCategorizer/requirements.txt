@@ -1,2 +1,4 @@
 tqdm>=4.32.2
 python-magic>=0.4.13
+patool>=1.12
+pyunpack>=0.2.2
