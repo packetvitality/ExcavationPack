@@ -24,6 +24,13 @@ To-date, the framework provides the capability to process six data types using a
 
 ## Decompression
 - [x] Gzip
+- [x] RAR
+- [x] ZIP
+- [x] TAR
+- [x] BZIP2
+
+## Supported Platforms
+The framework was developed and tested using Ubuntu 20.04.1. Though it technically works on Microsoft Windows using Docker Desktop, the performance is abysmal due to how Docker containers access the Windows file system. Docker Desktop for Windows is facilitated by using Windows Subsystem for Linux 2 (WSL2). The path to attach volumes from Windows to Docker is: Docker -> WSL2 -> Windows file system. This connection path adds latency and renders the framework unusable. The latency for attached volumes is a known issue, and Microsoft generally recommends against "working across operating systems with your files". Performance is likely better if attached volumes reside directly in WSL2 instead of the Windows filesystem; however, this research did not cover this test. This framework was not tested with Docker Desktop on Mac. 
 
 # Concept
 The framework is focused on identifying points of interest within a data dump containing an unforeseen number of directories, subdirectories, and files. Files stored in an unstructured tree are common, as evidenced in ‘Cit0Day’ breach collection and the ‘BlueLeaks’ data dump. The strategy taken to solve this problem can be summarized into two simple steps:
