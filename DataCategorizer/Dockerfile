@@ -3,8 +3,18 @@
 FROM python:3.8-slim-buster
 
 #Install packages
-RUN apt-get -y update
-RUN apt-get -y install libmagic1
+RUN \
+    sed -i -e's/ main/ main contrib non-free/g' /etc/apt/sources.list   \  
+    && apt-get -y update                                                \
+    && apt-get install -y libmagic1                                     \
+    p7zip-full                                                          \
+    unrar
+
+
+# RUN apt-get -y update
+# RUN apt-get -y install libmagic1
+# RUN apt-get -y install p7zip-full
+# RUN apt-get -y install unrar-free
 
 # Setting the timezone so log files are timestamped correctly
 # Change this to what you need if you want accurate timestamps :)

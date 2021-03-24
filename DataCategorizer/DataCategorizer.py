@@ -757,7 +757,8 @@ class DataCategorizer:
         Uncompresses the file and saves to the destination directory
         """
         try:
-            destination_dir = os.path.join(os.path.dirname(filename), "Uncompressed", os.path.basename(filename.split(".")[0]))
+            # destination_dir = os.path.join(os.path.dirname(filename), "Uncompressed", os.path.basename(filename.split(".")[0]))
+            destination_dir = os.path.join(os.path.dirname(filename), "Uncompressed", os.path.basename(filename))
             
             if not os.path.isdir(destination_dir):
                 os.makedirs(destination_dir)
@@ -850,7 +851,7 @@ class DataCategorizer:
 
                 if filetype:
                     # Compressed files
-                    if "gzip compressed data" in filetype.lower() or "zip archive data" in filetype.lower() or "posix tar archive" in filetype.lower() or "bzip2 compressed data" in filetype.lower():
+                    if "gzip compressed data" in filetype.lower() or "zip archive data" in filetype.lower() or "posix tar archive" in filetype.lower() or "bzip2 compressed data" in filetype.lower() or "rar archive data" in filetype.lower():
                         self._sql_update_category_byhash(filehash, self.compressed)
                         self._sql_update_state(filehash, self.processing) #Take ownership so other processors do not try
                         uncompressed = self._uncompress_general(filename, filehash)
