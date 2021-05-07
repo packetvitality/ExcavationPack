@@ -2,7 +2,7 @@
 
 # Summary
 Data dumped online from breaches is rich with information but can be challenging to process. The data is often unstructured and littered with different data types.
-This framework uses Docker containers to process unstructured data. Utilizing this framework will help identify points of interest in data dumps.
+This framework uses Docker containers to process unstructured data. Utilizing this framework will help identify points of interest in data dumps. This project was written as part of my Masters program, more details about the motives and build process can be found here: https://www.sans.org/reading-room/whitepapers/OpenSource/excavationpack-framework-processing-data-dumps-40275
 
 # Usage
 1.	Ensure Docker and docker-compose are operational.
