@@ -13,6 +13,26 @@ This framework uses Docker containers to process unstructured data. Utilizing th
 
 Customizing the docker-compose file provides more processing control. For example, users can configure the 'replicas' setting to create more or fewer instances of a specific container. The user can configure the 'resources' setting to control the amount of CPU and/or memory the containers use. The framework can take significant time to process depending on the size of the data dump. A useful command to check on the status of containers is 'docker container stats'. This command shows the currently running containers and their resource utilization.
 
+![Screenshot 2021-05-07 145442](https://user-images.githubusercontent.com/45752781/117512294-306cb680-af44-11eb-922a-fe99197434b1.png)
+Starting from left to right, and moving from top to bottom, the image above illustrates what is needed to run the project. 
+
+The framework runs using Docker and docker-compose. We must ensure Docker and Docker-compose are operational.
+
+Next is the docker-compose configuration file. Modifying this file is optional and allows the user to decide how many instances of any workflow to run. In the example above, 5 instances of the data categorizer will run and 2 copies of the excel search will run (the rest of the config is truncated). 
+
+A list of keywords is required to specify what we will be searching for.
+
+There is a ‘.env’ file which specifies a working directory (where things like the ‘keywords.txt’ file and results are stored) and where to find the data to search. 
+
+Lastly, the project is initiated using the ‘docker-compose up’ command from the project directory. 
+
+
+![Screenshot 2021-05-07 145613](https://user-images.githubusercontent.com/45752781/117512401-66aa3600-af44-11eb-9bfb-bb53e8a74571.png)
+In the image above, the top right corner shows how the results are stored in text files. As keywords are identified in the data dump, the results are stored in text files with names corresponding to the keyword. A snippet of one of the text files is shown in the second screenshot from the top. The result file contains the file where the keyword was discovered and the full context of the line.
+
+While the framework is running, a helpful command is ‘docker container stats’. This will show the current resource utilization of the various workflows. As the data processing completes, each container will shut down. This is a good indicator to check if data is still being processed. 
+
+
 # Current Functionality
 To-date, the framework provides the capability to process five data types using a supplied list of keywords. It also handles uncompressing a few different formats. The results are stored in text files which are grouped by keyword. The processing occurs concurrently. There is no known limitation for the depth of directories and subdirectories the framework can traverse or the number of files it can search through. The framework will also handle decompressing files and adding newly decompressed files into the processing workflow. The specific data types supported are as follows:
 
@@ -43,3 +63,10 @@ The diagram below illustrates how the framework processes data. There are 'categ
 ![image](https://user-images.githubusercontent.com/45752781/111229585-607e8580-85a3-11eb-9b7d-7bdde6de9dfe.png)
 
 *To date all of the containers are using Python, but that is just based on my knowledge, comfort level, and the fact that this was the next evolution of a monolithic Python script.*
+
+# Common Problems / Troubleshooting
+Make sure the user you initiate the containers with has read/write access to the data dump directory. If there are no compressed files, only read access is needed. However, if a file needs to be uncompressed it will do so within the data dump directory. I've noted a couple instances where the data was copied/moved to a folder created by 'root', making the contents unavailable to normal user accounts. 
+
+Logs files are created in the working directory within the results folder. Searching or following those logs looking for 'Failed' events can help identify what may be going wrong.
+
+Happy to answer questions if you have having trouble. I wrote this to help others in the community, so I'd love to hear from you! I can be reached on Twitter @packetvitality.
