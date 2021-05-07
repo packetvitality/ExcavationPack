@@ -6,10 +6,10 @@ This framework uses Docker containers to process unstructured data. Utilizing th
 
 # Usage
 1.	Ensure Docker and docker-compose are operational.
-2.	Edit the environmental variable (.env) file to specify a working directory and the directory to be searched. 
+2.	[Optional] Customize the docker-compose file.
 3.	Place a keyword text file in the working directory.
-4.	[Optional] Customize the docker-compose file.
-5.	Issue the command ‘docker-compose up’ from the project directory.
+4.	Edit the environmental variable (.env) file to specify a working directory and the directory to be searched. 
+6.	Issue the command ‘docker-compose up’ from the project directory.
 
 Customizing the docker-compose file provides more processing control. For example, users can configure the 'replicas' setting to create more or fewer instances of a specific container. The user can configure the 'resources' setting to control the amount of CPU and/or memory the containers use. The framework can take significant time to process depending on the size of the data dump. A useful command to check on the status of containers is 'docker container stats'. This command shows the currently running containers and their resource utilization.
 
